@@ -1,5 +1,10 @@
 package com.mycompany.prog5121_poe;
-
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.file.Files;
@@ -24,7 +29,12 @@ public class Message {
 
     // ---- Arrays for Part 3 ----
     
-    
+    private static final List<Message> sentMessages = new ArrayList<>();
+    private static final List<Message> disregardedMessages = new ArrayList<>();
+    private static final List<Message> storedMessages = new ArrayList<>(); // read from the JSON file
+    // messageHashes and messageIDs are parallel: index i in one matches index i in the other.
+    private static final List<String> messageHashes = new ArrayList<>();
+    private static final List<String> messageIDs = new ArrayList<>();
 
     private String messageID;
     private String recipient;
@@ -131,7 +141,14 @@ public class Message {
         }
     }
 
+    // Adds this message's ID and hash to the two parallel arrays (once only).
     
+    private void registerIdentifiers() {
+        if (!messageIDs.contains(messageID)) {
+            messageIDs.add(messageID);
+            messageHashes.add(messageHash);
+        }
+    }
 
     // ---------- Report / display helpers ----------
 
