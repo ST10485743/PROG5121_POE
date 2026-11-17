@@ -153,5 +153,81 @@ public class Main {
         System.out.println(Message.sentMessagesReport());
     }
 
-    
+     // ---------- Part 3: Stored Messages ----------
+
+    private static void runStoredMessages(Scanner scanner, String sender) {
+        // Re-read the JSON file into the stored-messages array before using it.
+        Message.refreshStoredMessages();
+        System.out.println();
+        System.out.println("Loaded " + Message.getStoredMessageTexts().length
+                + " stored message(s) from the JSON file.");
+
+        boolean inMenu = true;
+        while (inMenu) {
+            System.out.println();
+            System.out.println("--- Stored Messages ---");
+            System.out.println("1) Display the sender and recipient of all stored messages");
+            System.out.println("2) Display the longest stored message");
+            System.out.println("3) Search for a message ID");
+            System.out.println("4) Search for all messages for a particular recipient");
+            System.out.println("5) Delete a message using its message hash");
+            System.out.println("6) Display a report of all stored messages");
+            System.out.println("7) Back to main menu");
+            int choice = readInt(scanner, "Choose an option: ");
+
+            switch (choice) {
+                case 1:
+                    System.out.println(Message.displayStoredSendersAndRecipients(sender));
+                    break;
+                case 2:
+                    System.out.println("Longest stored message: " + Message.longestStoredMessage());
+                    break;
+                case 3:
+                    System.out.print("Enter the message ID: ");
+                    System.out.println(Message.searchByMessageID(scanner.nextLine().trim()));
+                    break;
+                case 4:
+                    searchByRecipient(scanner);
+                    break;
+                case 5:
+                    System.out.print("Enter the message hash: ");
+                    System.out.println(Message.deleteByMessageHash(scanner.nextLine().trim()));
+                    break;
+                case 6:
+                    System.out.println(Message.storedMessagesReport());
+                    break;
+                case 7:
+                    inMenu = false;
+                    break;
+                default:
+                    System.out.println("Please choose 1 to 7.");
+            }
+        }
+    }
+
+    private static void searchByRecipient(Scanner scanner) {
+        System.out.print("Enter the recipient cell number: ");
+        String recipient = scanner.nextLine().trim();
+
+        String[] found = Message.searchByRecipient(recipient);
+        if (found.length == 0) {
+            System.out.println("No messages found for " + recipient + ".");
+            return;
+        }
+        for (String text : found) {
+            System.out.println("\"" + text + "\"");
+        }
+    }
+
+    private static int readInt(Scanner scanner, String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            String input = scanner.nextLine().trim();
+            try {
+                return Integer.parseInt(input);
+            } catch (NumberFormatException e) {
+                System.out.println("Please enter a whole number.");
+            }
+        }
+    }
 }
