@@ -1,5 +1,10 @@
 package com.mycompany.prog5121_poe;
-
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.file.Files;
@@ -24,7 +29,12 @@ public class Message {
 
     // ---- Arrays for Part 3 ----
     
-    
+    private static final List<Message> sentMessages = new ArrayList<>();
+    private static final List<Message> disregardedMessages = new ArrayList<>();
+    private static final List<Message> storedMessages = new ArrayList<>(); // read from the JSON file
+    // messageHashes and messageIDs are parallel: index i in one matches index i in the other.
+    private static final List<String> messageHashes = new ArrayList<>();
+    private static final List<String> messageIDs = new ArrayList<>();
 
     private String messageID;
     private String recipient;
@@ -131,7 +141,14 @@ public class Message {
         }
     }
 
+    // Adds this message's ID and hash to the two parallel arrays (once only).
     
+    private void registerIdentifiers() {
+        if (!messageIDs.contains(messageID)) {
+            messageIDs.add(messageID);
+            messageHashes.add(messageHash);
+        }
+    }
 
     // ---------- Report / display helpers ----------
 
@@ -177,6 +194,225 @@ public class Message {
         return sentMessages.size();
     }
 
+    // ---------- Part 3: reading the arrays back out ----------
+
+    public static String[] getSentMessageTexts() {
+        return textsOf(sentMessages);
+    }
+
+    public static String[] getDisregardedMessageTexts() {
+        return textsOf(disregardedMessages);
+    }
+
+    public static String[] getStoredMessageTexts() {
+        return textsOf(storedMessages);
+    }
+
+    public static String[] getMessageHashes() {
+        return messageHashes.toArray(new String[0]);
+    }
+
+    public static String[] getMessageIDs() {
+        return messageIDs.toArray(new String[0]);
+    }
+
+    private static String[] textsOf(List<Message> messages) {
+        String[] texts = new String[messages.size()];
+        for (int i = 0; i < texts.length; i++) {
+            texts[i] = messages.get(i).messageText;
+        }
+        return texts;
+    }
+
+    // ---------- Part 3: Stored Messages menu features ----------
+
+    // Sender and recipient of every stored message.
+    
+    public static String displayStoredSendersAndRecipients(String sender) {
+        if (storedMessages.isEmpty()) {
+            return "No stored messages found.";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Message m : storedMessages) {
+            sb.append("Sender: ").append(sender)
+                    .append(" | Recipient: ").append(m.recipient)
+                    .append(System.lineSeparator());
+        }
+        return sb.toString();
+    }
+
+    // The longest stored message.
+    
+    public static String longestStoredMessage() {
+        Message longest = null;
+        for (Message m : storedMessages) {
+            if (longest == null || m.messageText.length() > longest.messageText.length()) {
+                longest = m;
+            }
+        }
+        return longest == null ? "No stored messages found." : longest.messageText;
+    }
+
+    // Finds a message by ID across the sent, disregarded and stored arrays.
+    
+    public static Message findByMessageID(String id) {
+        if (!messageIDs.contains(id)) {
+            return null;
+        }
+        for (List<Message> messages : List.of(sentMessages, disregardedMessages, storedMessages)) {
+            for (Message m : messages) {
+                if (m.messageID.equals(id)) {
+                    return m;
+                }
+            }
+        }
+        return null;
+    }
+
+    public static String searchByMessageID(String id) {
+        Message found = findByMessageID(id);
+        if (found == null) {
+            return "No message found with ID " + id + ".";
+        }
+        return "Recipient: " + found.recipient + ", Message: " + found.messageText;
+    }
+
+    // Texts of every sent or stored message for one recipient.
+    
+    public static String[] searchByRecipient(String recipient) {
+        List<String> matches = new ArrayList<>();
+        for (List<Message> messages : List.of(sentMessages, storedMessages)) {
+            for (Message m : messages) {
+                if (m.recipient.equals(recipient)) {
+                    matches.add(m.messageText);
+                }
+            }
+        }
+        return matches.toArray(new String[0]);
+    }
+
+    // Deletes a stored message using its hash. The hash array is searched,
+    // the parallel ID array gives the matching ID, and that message is
+    // removed from the stored array, the JSON file and both parallel arrays.
+    
+    public static String deleteByMessageHash(String hash) {
+        for (int i = 0; i < messageHashes.size(); i++) {
+            if (!messageHashes.get(i).equalsIgnoreCase(hash)) {
+                continue;
+            }
+            String id = messageIDs.get(i);
+            for (Message target : storedMessages) {
+                if (target.messageID.equals(id)) {
+                    List<Message> remaining = new ArrayList<>(storedMessages);
+                    remaining.remove(target);
+                    try {
+                        writeMessages(storagePath, remaining);
+                    } catch (IOException e) {
+                        return "Message could not be deleted: " + e.getMessage();
+                    }
+                    storedMessages.remove(target);
+                    messageHashes.remove(i);
+                    messageIDs.remove(i);
+                    return "Message: \"" + target.messageText + "\" successfully deleted.";
+                }
+            }
+        }
+        return "No stored message found with hash " + hash + ".";
+    }
+
+    // ---------- Part 3: JSON storage (Gson) ----------
+
+    // stores message on the JSON file. 
+    // returns true if it was written, false if the file could not be read or written
+    
+    public boolean storeMessage() {
+        try {
+            List<Message> all = Files.exists(storagePath)
+                    ? readMessages(storagePath) : new ArrayList<>();
+            all.add(this);
+            writeMessages(storagePath, all);
+            return true;
+        } catch (IOException | JsonParseException | IllegalStateException e) {
+            System.out.println("Could not store message to JSON: " + e.getMessage());
+            return false;
+        }
+    }
+
+    // Reads the JSON file into the stored-messages array
+    
+    public static void refreshStoredMessages() {
+        storedMessages.clear();
+        if (!Files.exists(storagePath)) {
+            return;
+        }
+        try {
+            for (Message m : readMessages(storagePath)) {
+                storedMessages.add(m);
+                m.registerIdentifiers();
+            }
+        } catch (IOException | JsonParseException | IllegalStateException e) {
+            System.out.println("Could not read stored messages: " + e.getMessage());
+        }
+    }
+
+    // Reads messages from any external JSON file
+    
+    public static Message[] loadMessagesFromFile(String filePath) {
+        try {
+            return readMessages(Path.of(filePath)).toArray(new Message[0]);
+        } catch (IOException | JsonParseException | IllegalStateException e) {
+            System.out.println("Could not read " + filePath + ": " + e.getMessage());
+            return new Message[0];
+        }
+    }
+
+    private static List<Message> readMessages(Path path) throws IOException {
+        List<Message> messages = new ArrayList<>();
+        String text = Files.readString(path);
+        if (text.isBlank()) {
+            return messages; // an empty file just means no messages yet
+        }
+        JsonArray array = JsonParser.parseString(text).getAsJsonArray();
+        for (JsonElement element : array) {
+            messages.add(fromJson(element.getAsJsonObject()));
+        }
+        return messages;
+    }
+
+    private static Message fromJson(JsonObject object) {
+        String id = readString(object, "messageID");
+        String hash = readString(object, "messageHash");
+
+        Message message = new Message(readString(object, "recipient"),
+                readString(object, "message"), 0);
+        if (!id.isEmpty()) {
+            message.messageID = id;
+        }
+        // Use the file's hash if it has one, otherwise rebuild it from the file's ID.
+        message.messageHash = hash.isEmpty() ? message.createMessageHash() : hash;
+        return message;
+    }
+
+    private static String readString(JsonObject object, String key) {
+        return object.has(key) && !object.get(key).isJsonNull()
+                ? object.get(key).getAsString() : "";
+    }
+
+    private static void writeMessages(Path path, List<Message> messages) throws IOException {
+        JsonArray array = new JsonArray();
+        for (Message m : messages) {
+            JsonObject object = new JsonObject();
+            object.addProperty("messageID", m.messageID);
+            object.addProperty("messageHash", m.messageHash);
+            object.addProperty("recipient", m.recipient);
+            object.addProperty("message", m.messageText);
+            array.add(object);
+        }
+        try (Writer writer = Files.newBufferedWriter(path)) {
+            new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create()
+                    .toJson(array, writer);
+        }
+    }
     
     // ---------- Getters ----------
 
