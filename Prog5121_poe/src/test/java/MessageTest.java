@@ -1,18 +1,28 @@
 import com.mycompany.prog5121_poe.Message;
-
+import java.nio.file.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
-
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  *
  * @author leago
  */
 class MessageTest {
+
+    @TempDir
+    Path tempDir;
+
+    @BeforeEach
+    void setUp() {
+        Message.resetSession();
+        // Stored messages go to a temporary file so tests never touch the real storedMessages.json
+        Message.setStoragePath(tempDir.resolve("storedMessages.json"));
+    }
 
 
     @AfterEach
